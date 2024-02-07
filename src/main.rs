@@ -1,4 +1,7 @@
+mod chess_logic;
+
 use bevy::prelude::*;
+use chess_logic::{ChessGame, ChessPlugin};
 
 #[derive(Resource)]
 struct BoardCellColors {
@@ -6,21 +9,27 @@ struct BoardCellColors {
     dark: Color,
 }
 
+#[derive(Component)]
+struct Piece;
+
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Chess".to_string(),
-                resolution: (600., 600.).into(),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Chess".to_string(),
+                    resolution: (600., 600.).into(),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
+            ChessPlugin,
+        ))
         .insert_resource(BoardCellColors {
             light: Color::rgb(0.75, 0.75, 0.75),
             dark: Color::rgb(0.25, 0.25, 0.25),
         })
-        .add_systems(Startup, (setup, draw_board, draw_king).chain())
+        .add_systems(Startup, (setup, draw_board, spown_pieces).chain())
         .run();
 }
 
@@ -59,9 +68,38 @@ fn draw_board(
     }
 }
 
-fn draw_king(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(SpriteBundle {
-        texture: asset_server.load("sprites/K.png"),
-        ..default()
-    });
+fn spown_pieces(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    windows: Query<&mut Window>,
+    chess_game: Res<ChessGame>,
+) {
+    let win = windows.single();
+    let dx = win.resolution.width() / 8.0;
+    let dy = win.resolution.height() / 8.0;
+    let fen = chess_game.fen();
+    info!("FEN: {}", fen);
+    let mut i = 0;
+    for piece in fen.chars() {
+        if piece == '/' {
+            continue;
+        }
+        if piece.is_ascii_digit() {
+            i += piece.to_digit(10).unwrap();
+            continue;
+        }
+        let x = i % 8;
+        let y = i / 8;
+        let x = (x as f32 + 0.5) * dx - win.resolution.width() / 2.0;
+        let y = (y as f32 + 0.5) * dy - win.resolution.height() / 2.0;
+        let texture = format!("pieces/{}.png", piece);
+        let texture = asset_server.load(texture);
+        commands.spawn(SpriteBundle {
+            texture,
+            transform: Transform::from_translation(Vec3::new(x, y, 0.0))
+                .with_scale(Vec3::splat(0.15)),
+            ..default()
+        });
+        i += 1;
+    }
 }
